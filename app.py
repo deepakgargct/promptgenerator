@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sentence_transformers import SentenceTransformer
 
-# Load model once
+# Load embedding model once
 @st.cache_resource
 def load_model():
     return SentenceTransformer("all-MiniLM-L6-v2")
@@ -59,7 +59,7 @@ def generate_search_prompts(keyword, intent):
             f"licensed {kw} experts near me",
             f"{kw} packages and offers",
         ]
-    else:  # blog
+    else:
         return [
             f"how does {kw} work",
             f"what is {kw}",
@@ -94,41 +94,60 @@ def generate_ai_prompts(keyword, intent):
             f"Act as a subject expert and explain '{keyword}' to beginners.",
         ]
 
-# --- App UI ---
-st.title("🔍 Keyword Intent → Prompt Generator + Clustering")
-st.markdown("Paste up to **20 keywords** below. We'll detect or let you override the search **intent**, then generate **prompts** and cluster keywords.")
+# --- Initialize session state ---
+if "confirmed_keywords" not in st.session_state:
+    st.session_state.confirmed_keywords = []
+if "keyword_input_raw" not in st.session_state:
+    st.session_state.keyword_input_raw = ""
 
-keywords_raw = st.text_area("🔤 Enter keywords (one per line):", height=200)
-keywords = [kw.strip() for kw in keywords_raw.splitlines() if kw.strip()]
+# --- UI: Step 1 - Keyword Input ---
+st.title("🔍 Keyword Prompt Generator + Intent + Clustering")
+st.markdown("Enter up to 20 keywords. Confirm intent, generate search + AI prompts, and export as CSV.")
 
-# Reset Button
-if st.button("🔄 Reset Intents"):
-    for kw in keywords:
-        st.session_state.pop(f"intent_{kw}", None)
-    st.success("Session intents reset.")
+st.subheader("📝 Step 1: Enter Keywords")
+st.session_state.keyword_input_raw = st.text_area(
+    "Enter one keyword per line:",
+    value=st.session_state.keyword_input_raw,
+    height=200
+)
 
-# Proceed only if keywords are entered
+if st.button("✅ Confirm Keywords"):
+    confirmed = [kw.strip() for kw in st.session_state.keyword_input_raw.splitlines() if kw.strip()]
+    if len(confirmed) > 20:
+        st.error("❌ Only up to 20 keywords are allowed.")
+    elif len(confirmed) == 0:
+        st.warning("⚠️ Please enter at least one keyword.")
+    else:
+        st.session_state.confirmed_keywords = confirmed
+        for kw in confirmed:
+            st.session_state[f"intent_{kw}"] = detect_intent(kw)
+
+# --- Reset Button ---
+if st.button("🔄 Reset All"):
+    st.session_state.keyword_input_raw = ""
+    st.session_state.confirmed_keywords = []
+    for k in list(st.session_state.keys()):
+        if k.startswith("intent_"):
+            del st.session_state[k]
+    st.experimental_rerun()
+
+keywords = st.session_state.confirmed_keywords
+
+# --- Step 2: Override Intent ---
 if keywords:
-    if len(keywords) > 20:
-        st.error("🚫 Max 20 keywords allowed.")
-        st.stop()
+    st.subheader("🧠 Step 2: Review or Override Intent")
 
-    st.subheader("🧠 Step 1: Intent Detection & Override")
-
-    # Collect intent (default or user-selected)
     selected_intents = {}
     for kw in keywords:
         key_id = f"intent_{kw}"
-        if key_id not in st.session_state:
-            st.session_state[key_id] = detect_intent(kw)
         selected_intents[kw] = st.selectbox(
             f"Intent for `{kw}`:",
             ["product", "service", "blog"],
-            index=["product", "service", "blog"].index(st.session_state[key_id]),
+            index=["product", "service", "blog"].index(st.session_state.get(key_id, "blog")),
             key=key_id
         )
 
-    if st.button("✅ Generate Prompts + Cluster"):
+    if st.button("🚀 Generate Prompts + Cluster"):
         embeddings = model.encode(keywords)
         n_clusters = min(len(keywords), 4)
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init="auto")
@@ -149,9 +168,8 @@ if keywords:
                 })
 
         df = pd.DataFrame(rows)
-        st.success("🎉 Prompt generation complete.")
+        st.success("✅ Prompt generation complete.")
         st.dataframe(df)
 
-        # Export
         csv = df.to_csv(index=False).encode("utf-8")
         st.download_button("📥 Download CSV", csv, "keyword_prompts.csv", "text/csv")
