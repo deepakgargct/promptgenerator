@@ -30,7 +30,7 @@ def detect_intent(keyword):
         return "product"
     return "blog"
 
-# --- Search Prompts ---
+# --- Search Prompts Only ---
 def generate_search_prompts(keyword, intent):
     kw = keyword.lower()
     if intent == "product":
@@ -59,7 +59,7 @@ def generate_search_prompts(keyword, intent):
             f"licensed {kw} experts near me",
             f"{kw} packages and offers",
         ]
-    else:
+    else:  # blog
         return [
             f"how does {kw} work",
             f"what is {kw}",
@@ -73,27 +73,6 @@ def generate_search_prompts(keyword, intent):
             f"{kw} vs alternatives: what to know",
         ]
 
-# --- AI Prompts ---
-def generate_ai_prompts(keyword, intent):
-    if intent == "product":
-        return [
-            f"Act as an ecommerce copywriter and write a product description for '{keyword}'.",
-            f"Create a comparison table for '{keyword}' vs alternatives.",
-            f"List top 5 use-cases for '{keyword}' and write example product blurbs.",
-        ]
-    elif intent == "service":
-        return [
-            f"Act as a local SEO expert and create a service page for '{keyword}'.",
-            f"Write a testimonial and case study summary for someone using '{keyword}'.",
-            f"Explain the process and benefits of hiring a '{keyword}' service provider.",
-        ]
-    else:
-        return [
-            f"Write a blog post outline for the topic '{keyword}'.",
-            f"Generate 5 FAQs about '{keyword}'.",
-            f"Act as a subject expert and explain '{keyword}' to beginners.",
-        ]
-
 # --- Initialize session state ---
 if "confirmed_keywords" not in st.session_state:
     st.session_state.confirmed_keywords = []
@@ -102,7 +81,7 @@ if "keyword_input_raw" not in st.session_state:
 
 # --- UI: Step 1 - Keyword Input ---
 st.title("🔍 Keyword Prompt Generator + Intent + Clustering")
-st.markdown("Enter up to 20 keywords. Confirm intent, generate search + AI prompts, and export as CSV.")
+st.markdown("Enter up to 20 keywords. Confirm intent, generate search-style prompts, and export as CSV.")
 
 st.subheader("📝 Step 1: Enter Keywords")
 st.session_state.keyword_input_raw = st.text_area(
@@ -157,13 +136,11 @@ if keywords:
         for i, kw in enumerate(keywords):
             intent = selected_intents[kw]
             search_prompts = generate_search_prompts(kw, intent)
-            ai_prompts = generate_ai_prompts(kw, intent)
-            for prompt in search_prompts + ai_prompts:
+            for prompt in search_prompts:
                 rows.append({
                     "Keyword": kw,
                     "Intent": intent,
                     "Cluster": f"Cluster {cluster_labels[i]+1}",
-                    "Prompt Type": "Search" if prompt in search_prompts else "AI",
                     "Prompt": prompt
                 })
 
